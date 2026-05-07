@@ -5,6 +5,9 @@ use App\Http\Controllers\TransferController;
 use App\Http\Controllers\CardController;
 use App\Http\Controllers\ExchangeController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Web\CheckoutController;
+use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\SettingsController;
 
 Route::middleware('guest')->group(function () {
     Route::get('/',         [AuthController::class, 'showLogin'])->name('home');
@@ -19,6 +22,22 @@ Route::middleware('guest')->group(function () {
 Route::middleware(['auth'])->group(function () {
     Route::get('/panel', [DashboardController::class, 'index'])->name('dashboard');
     Route::post('/cikis', [AuthController::class, 'logout'])->name('logout');
+
+// ── Hesap Hareketleri
+    Route::prefix('hareketler')->name('transactions.')->group(function () {
+        Route::get('/', [TransactionController::class, 'index'])->name('index');
+    });
+
+    // ── Ayarlar
+    Route::prefix('ayarlar')->name('settings.')->group(function () {
+        Route::get('/', [SettingsController::class, 'index'])->name('index');
+        Route::patch('/profil',           [SettingsController::class, 'updateProfile'])->name('updateProfile');
+        Route::patch('/sifre',            [SettingsController::class, 'updatePassword'])->name('updatePassword');
+        Route::patch('/kart/{card}/ozellikler', [SettingsController::class, 'updateCardFeatures'])->name('updateCardFeatures');
+        Route::patch('/guvenlik',         [SettingsController::class, 'updateSecurity'])->name('updateSecurity');
+        Route::patch('/bildirimler',      [SettingsController::class, 'updateNotifications'])->name('updateNotifications');
+    });
+
 
     Route::prefix('transfer')->name('transfer.')->group(function () {
         Route::get('/',              [TransferController::class, 'index'])->name('index');
@@ -40,4 +59,16 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/al',           [ExchangeController::class, 'buy'])->name('buy');
         Route::post('/sat/{investment}', [ExchangeController::class, 'sell'])->name('sell');
     });
+    
 });
+Route::get('/checkout/{token}', [CheckoutController::class, 'show'])
+    ->name('checkout.show');
+
+Route::post('/checkout/{token}/process', [CheckoutController::class, 'process'])
+    ->name('checkout.process');
+
+Route::get('/checkout/result/success', [CheckoutController::class, 'success'])
+    ->name('checkout.success');
+
+Route::get('/checkout/result/failed', [CheckoutController::class, 'failed'])
+    ->name('checkout.failed');
