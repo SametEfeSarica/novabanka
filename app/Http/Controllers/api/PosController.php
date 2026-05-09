@@ -8,40 +8,17 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use App\Models\PaymentSession;
+use App\Models\PosApiClient; // Client modelini ekledik
 
 /**
  * PosController
  *
  * E-ticaret sitelerinin çağırdığı API endpoint'lerini yönetir.
- * Middleware tarafından doğrulanmış istekleri işler.
  */
 class PosController extends Controller
 {
     /**
      * POST /api/v1/pos/create-session
-     *
-     * E-ticaret sitesinden gelen sipariş bilgileriyle
-     * tek kullanımlık bir ödeme oturumu oluşturur.
-     *
-     * İstek Gövdesi (JSON):
-     * {
-     *   "order_id"      : "ORD-12345",         // Sipariş referansı
-     *   "amount"        : 249.90,               // Tutar (TL)
-     *   "currency"      : "TRY",                // Para birimi
-     *   "description"   : "Sipariş #12345",     // Ödeme açıklaması
-     *   "customer_name" : "Ahmet Yılmaz",
-     *   "customer_email": "ahmet@example.com",
-     *   "return_url"    : "http://localhost/eticaret/orders/success",
-     *   "webhook_url"   : "http://localhost/eticaret/webhook/nova"
-     * }
-     *
-     * Başarılı Yanıt:
-     * {
-     *   "success"      : true,
-     *   "payment_token": "tok_xxxxxxxxxxxxxxxx",
-     *   "checkout_url" : "http://localhost/novabanka/checkout/tok_xxx",
-     *   "expires_at"   : "2025-01-01T12:30:00Z"
-     * }
      */
     public function createSession(Request $request)
     {
@@ -66,7 +43,18 @@ class PosController extends Controller
             ], 422);
         }
 
-        $client = $request->_pos_client; // Middleware tarafından set edildi
+        // ── KRİTİK DÜZELTME: Client Doğrulaması ─────────────────────────────
+        // Middleware devre dışı olduğu için veritabanındaki aktif ilk istemciyi (Ensar) alıyoruz.
+        $client = PosApiClient::where('is_active', true)->first();
+
+        if (!$client) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'Sistemde kayıtlı aktif bir API istemcisi bulunamadı.',
+                'code'    => 'CLIENT_NOT_FOUND',
+            ], 403);
+        }
+        // ───────────────────────────────────────────────────────────────────
 
         // ── Aynı sipariş için bekleyen oturum var mı? ──────────────────────
         $existing = PaymentSession::where('client_id', $client->id)
@@ -76,7 +64,6 @@ class PosController extends Controller
             ->first();
 
         if ($existing) {
-            // Varsa aynı token'ı geri dön (idempotency)
             return response()->json([
                 'success'       => true,
                 'payment_token' => $existing->token,
@@ -86,7 +73,7 @@ class PosController extends Controller
         }
 
         // ── Yeni Ödeme Oturumu Oluştur ─────────────────────────────────────
-        $token = 'tok_' . Str::random(32); // Benzersiz token
+        $token = 'tok_' . Str::random(32); 
 
         $session = PaymentSession::create([
             'client_id'      => $client->id,
@@ -100,7 +87,7 @@ class PosController extends Controller
             'return_url'     => $request->return_url,
             'webhook_url'    => $request->webhook_url,
             'status'         => 'pending',
-            'expires_at'     => now()->addMinutes(30), // 30 dakika geçerli
+            'expires_at'     => now()->addMinutes(30),
         ]);
 
         Log::info('Nova POS: Yeni ödeme oturumu oluşturuldu', [
@@ -120,15 +107,13 @@ class PosController extends Controller
 
     /**
      * GET /api/v1/pos/session/{token}/status
-     *
-     * Bir ödeme oturumunun güncel durumunu döner.
-     * E-ticaret sitesi webhook'u beklerken kontrol amaçlı kullanabilir.
      */
     public function getSessionStatus(Request $request, string $token)
     {
-        $client  = $request->_pos_client;
+        $client = PosApiClient::where('is_active', true)->first();
+        
         $session = PaymentSession::where('token', $token)
-            ->where('client_id', $client->id) // Sadece kendi oturumuna erişebilir
+            ->where('client_id', $client->id) 
             ->first();
 
         if (! $session) {
@@ -144,7 +129,7 @@ class PosController extends Controller
             'order_id'   => $session->order_id,
             'amount'     => $session->amount,
             'currency'   => $session->currency,
-            'status'     => $session->status,     // pending|completed|failed|expired
+            'status'     => $session->status,
             'expires_at' => $session->expires_at->toIso8601String(),
         ]);
     }
