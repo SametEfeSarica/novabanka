@@ -11,30 +11,36 @@ use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
 
-// ─── SAMET İÇİN AKILLI BANKA KURULUM ROTASI (BURAYA EKLEDİM) ───
+// ─── SAMET İÇİN GÜÇLENDİRİLMİŞ BANKA KURULUM ROTASI ───
 Route::get('/banka-kur', function() {
     try {
+        // Önbellekleri temizleyelim
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
         
-        // Tabloları güvenli bir şekilde oluşturur (Eksikleri tamamlar)
-        Artisan::call('migrate', ['--force' => true]);
+        // DİKKAT: Migration'ları klasör yolu belirterek zorla çalıştırıyoruz
+        // Bu sayede "❌ OLUŞTURULAMADI" hatasını aşmayı deneyeceğiz
+        Artisan::call('migrate', [
+            '--force' => true,
+            '--path' => 'database/migrations' 
+        ]);
 
-        $mesaj = "Veritabanı kontrol edildi: <br>";
+        $mesaj = "Veritabanı Durumu: <br>";
         $tablolar = ['pos_clients', 'pos_sessions', 'pos_transactions', 'users'];
         
         foreach ($tablolar as $tablo) {
             if (Schema::hasTable($tablo)) {
                 $mesaj .= "✅ {$tablo} tablosu hazır. <br>";
             } else {
-                $mesaj .= "❌ {$tablo} tablosu OLUŞTURULAMADI! <br>";
+                $mesaj .= "❌ {$tablo} tablosu hala bulunamadı! <br>";
             }
         }
 
-        return "<h1>Banka Sistemi Kontrolü Tamamlandı</h1>" . $mesaj . "<br><b>Artık ödemeleri kabul edebilirsin kanka!</b>";
+        return "<h1>Banka Sistemi Kurulum Ekranı</h1>" . $mesaj . 
+               "<br><i>Eğer hala kırmızı çarpı varsa Samet'in Render loglarına bakması gerekir.</i>";
         
     } catch (\Exception $e) {
-        return "<h1>Hata:</h1> " . $e->getMessage();
+        return "<h1>Kritik Hata:</h1> " . $e->getMessage();
     }
 });
 // ───────────────────────────────────────────────────────────────
@@ -51,12 +57,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/panel', [DashboardController::class, 'index'])->name('dashboard');
     Route::post('/cikis', [AuthController::class, 'logout'])->name('logout');
 
-    // ── Hesap Hareketleri
     Route::prefix('hareketler')->name('transactions.')->group(function () {
         Route::get('/', [TransactionController::class, 'index'])->name('index');
     });
 
-    // ── Ayarlar
     Route::prefix('ayarlar')->name('settings.')->group(function () {
         Route::get('/', [SettingsController::class, 'index'])->name('index');
         Route::patch('/profil',           [SettingsController::class, 'updateProfile'])->name('updateProfile');
@@ -65,7 +69,6 @@ Route::middleware(['auth'])->group(function () {
         Route::patch('/guvenlik',         [SettingsController::class, 'updateSecurity'])->name('updateSecurity');
         Route::patch('/bildirimler',      [SettingsController::class, 'updateNotifications'])->name('updateNotifications');
     });
-
 
     Route::prefix('transfer')->name('transfer.')->group(function () {
         Route::get('/',              [TransferController::class, 'index'])->name('index');
@@ -87,18 +90,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/al',           [ExchangeController::class, 'buy'])->name('buy');
         Route::post('/sat/{investment}', [ExchangeController::class, 'sell'])->name('sell');
     });
-    
 });
 
-// ── Ödeme Sayfası Rotaları (Senin fırlatılacağın yer burası)
-Route::get('/checkout/{token}', [CheckoutController::class, 'show'])
-    ->name('checkout.show');
-
-Route::post('/checkout/{token}/process', [CheckoutController::class, 'process'])
-    ->name('checkout.process');
-
-Route::get('/checkout/result/success', [CheckoutController::class, 'success'])
-    ->name('checkout.success');
-
-Route::get('/checkout/result/failed', [CheckoutController::class, 'failed'])
-    ->name('checkout.failed');
+Route::get('/checkout/{token}', [CheckoutController::class, 'show'])->name('checkout.show');
+Route::post('/checkout/{token}/process', [CheckoutController::class, 'process'])->name('checkout.process');
+Route::get('/checkout/result/success', [CheckoutController::class, 'success'])->name('checkout.success');
+Route::get('/checkout/result/failed', [CheckoutController::class, 'failed'])->name('checkout.failed');
