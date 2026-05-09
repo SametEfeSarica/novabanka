@@ -8,22 +8,50 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Web\CheckoutController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\SettingsController;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schema;
+
+// ─── SAMET İÇİN AKILLI BANKA KURULUM ROTASI (BURAYA EKLEDİM) ───
+Route::get('/banka-kur', function() {
+    try {
+        Artisan::call('config:clear');
+        Artisan::call('cache:clear');
+        
+        // Tabloları güvenli bir şekilde oluşturur (Eksikleri tamamlar)
+        Artisan::call('migrate', ['--force' => true]);
+
+        $mesaj = "Veritabanı kontrol edildi: <br>";
+        $tablolar = ['pos_clients', 'pos_sessions', 'pos_transactions', 'users'];
+        
+        foreach ($tablolar as $tablo) {
+            if (Schema::hasTable($tablo)) {
+                $mesaj .= "✅ {$tablo} tablosu hazır. <br>";
+            } else {
+                $mesaj .= "❌ {$tablo} tablosu OLUŞTURULAMADI! <br>";
+            }
+        }
+
+        return "<h1>Banka Sistemi Kontrolü Tamamlandı</h1>" . $mesaj . "<br><b>Artık ödemeleri kabul edebilirsin kanka!</b>";
+        
+    } catch (\Exception $e) {
+        return "<h1>Hata:</h1> " . $e->getMessage();
+    }
+});
+// ───────────────────────────────────────────────────────────────
 
 Route::middleware('guest')->group(function () {
-    Route::get('/',         [AuthController::class, 'showLogin'])->name('home');
-    Route::get('/giris',    [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/giris',   [AuthController::class, 'login']);
-    Route::get('/kayit',    [AuthController::class, 'showRegister'])->name('register');
-    Route::post('/kayit',   [AuthController::class, 'register']);
+    Route::get('/',          [AuthController::class, 'showLogin'])->name('home');
+    Route::get('/giris',     [AuthController::class, 'showLogin'])->name('login');
+    Route::post('/giris',    [AuthController::class, 'login']);
+    Route::get('/kayit',     [AuthController::class, 'showRegister'])->name('register');
+    Route::post('/kayit',    [AuthController::class, 'register']);
 });
 
-// Dikkat: Burada az önce oluşturduğumuz BankAuthMiddleware'i de ekleyebiliriz ama 
-// şimdilik varsayılan auth'u kullanacağız.
 Route::middleware(['auth'])->group(function () {
     Route::get('/panel', [DashboardController::class, 'index'])->name('dashboard');
     Route::post('/cikis', [AuthController::class, 'logout'])->name('logout');
 
-// ── Hesap Hareketleri
+    // ── Hesap Hareketleri
     Route::prefix('hareketler')->name('transactions.')->group(function () {
         Route::get('/', [TransactionController::class, 'index'])->name('index');
     });
@@ -61,6 +89,8 @@ Route::middleware(['auth'])->group(function () {
     });
     
 });
+
+// ── Ödeme Sayfası Rotaları (Senin fırlatılacağın yer burası)
 Route::get('/checkout/{token}', [CheckoutController::class, 'show'])
     ->name('checkout.show');
 
