@@ -22,16 +22,18 @@ COPY . /var/www/html
 WORKDIR /var/www/html
 RUN composer install --no-interaction --optimize-autoloader --no-dev
 
-# 6. Apache konfigürasyonunu (Public klasörü için) güncelle
+# 6. Apache konfigürasyonunu güncelle
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
-# 7. İzinleri ayarla
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# 7. İzinleri en geniş kapsamda ayarla (Hata almamak için kritik)
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 /var/www/html/storage \
+    && chmod -R 775 /var/www/html/bootstrap/cache
 
-# 8. KRİTİK NOKTA: Başlangıç komutunu değiştiriyoruz
-# Önce migration yapar, başarılı olursa Apache'yi başlatır.
-CMD php artisan migrate --force && apache2-foreground
+# 8. Başlangıç komutu
+# Önbelleği temizler, tabloları basar ve sunucuyu başlatır
+CMD php artisan config:clear && php artisan migrate --force && apache2-foreground
 
 EXPOSE 80
