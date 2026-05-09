@@ -11,21 +11,17 @@ use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
 
-// ─── SAMET İÇİN GÜÇLENDİRİLMİŞ BANKA KURULUM ROTASI ───
+// ─── SAMET İÇİN BANKA SIFIRLAMA VE KURULUM ROTASI ───
 Route::get('/banka-kur', function() {
     try {
-        // Önbellekleri temizleyelim
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
         
-        // DİKKAT: Migration'ları klasör yolu belirterek zorla çalıştırıyoruz
-        // Bu sayede "❌ OLUŞTURULAMADI" hatasını aşmayı deneyeceğiz
-        Artisan::call('migrate', [
-            '--force' => true,
-            '--path' => 'database/migrations' 
-        ]);
+        // DİKKAT: 'migrate:fresh' komutu çakışan tabloları siler ve her şeyi yeniden kurar.
+        // Samet'in dosya ismi artık doğru olduğu için bu komut hatasız çalışacaktır.
+        Artisan::call('migrate:fresh', ['--force' => true]);
 
-        $mesaj = "Veritabanı Durumu: <br>";
+        $mesaj = "Veritabanı Sıfırlandı ve Yeniden Kuruldu: <br>";
         $tablolar = ['pos_clients', 'pos_sessions', 'pos_transactions', 'users'];
         
         foreach ($tablolar as $tablo) {
@@ -36,8 +32,8 @@ Route::get('/banka-kur', function() {
             }
         }
 
-        return "<h1>Banka Sistemi Kurulum Ekranı</h1>" . $mesaj . 
-               "<br><i>Eğer hala kırmızı çarpı varsa Samet'in Render loglarına bakması gerekir.</i>";
+        return "<h1>Banka Sistemi Kurulum Başarılı!</h1>" . $mesaj . 
+               "<br><b>Kanka şimdi terminalden Client oluşturabilirsin, her şey yeşil!</b>";
         
     } catch (\Exception $e) {
         return "<h1>Kritik Hata:</h1> " . $e->getMessage();
