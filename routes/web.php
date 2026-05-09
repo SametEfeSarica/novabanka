@@ -10,33 +10,59 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
-// ─── SAMET İÇİN BANKA SIFIRLAMA VE KURULUM ROTASI ───
+// ─── SAMET İÇİN SÜPER GÜÇLÜ KURULUM ROTASI (SQL ODDAKLI) ───
 Route::get('/banka-kur', function() {
     try {
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
-        
-        // DİKKAT: 'migrate:fresh' komutu çakışan tabloları siler ve her şeyi yeniden kurar.
-        // Samet'in dosya ismi artık doğru olduğu için bu komut hatasız çalışacaktır.
-        Artisan::call('migrate:fresh', ['--force' => true]);
 
-        $mesaj = "Veritabanı Sıfırlandı ve Yeniden Kuruldu: <br>";
-        $tablolar = ['pos_clients', 'pos_sessions', 'pos_transactions', 'users'];
+        // 1. pos_api_clients tablosunu manuel oluştur
+        DB::statement("CREATE TABLE IF NOT EXISTS pos_api_clients (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255),
+            api_key VARCHAR(255) UNIQUE,
+            api_secret VARCHAR(255),
+            webhook_secret VARCHAR(255),
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+
+        // 2. pos_sessions tablosunu manuel oluştur
+        DB::statement("CREATE TABLE IF NOT EXISTS pos_sessions (
+            id SERIAL PRIMARY KEY,
+            client_id INTEGER,
+            token VARCHAR(255) UNIQUE,
+            order_id VARCHAR(255),
+            amount DECIMAL(15,2),
+            currency VARCHAR(3) DEFAULT 'TRY',
+            status VARCHAR(20) DEFAULT 'pending',
+            customer_name VARCHAR(255),
+            customer_email VARCHAR(255),
+            return_url TEXT,
+            webhook_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+
+        $mesaj = "Veritabanı SQL ile kontrol edildi: <br>";
+        $tablolar = ['pos_api_clients', 'pos_sessions', 'users'];
         
         foreach ($tablolar as $tablo) {
             if (Schema::hasTable($tablo)) {
                 $mesaj .= "✅ {$tablo} tablosu hazır. <br>";
             } else {
-                $mesaj .= "❌ {$tablo} tablosu hala bulunamadı! <br>";
+                $mesaj .= "❌ {$tablo} tablosu hala eksik! <br>";
             }
         }
 
-        return "<h1>Banka Sistemi Kurulum Başarılı!</h1>" . $mesaj . 
-               "<br><b>Kanka şimdi terminalden Client oluşturabilirsin, her şey yeşil!</b>";
+        return "<h1>Süper Güçlü Kurulum Tamamlandı!</h1>" . $mesaj . 
+               "<br><b>Kanka artık tablolar hazır, hatasız çalışması lazım!</b>";
         
     } catch (\Exception $e) {
-        return "<h1>Kritik Hata:</h1> " . $e->getMessage();
+        return "<h1>SQL Hatası:</h1> " . $e->getMessage();
     }
 });
 // ───────────────────────────────────────────────────────────────
