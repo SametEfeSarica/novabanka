@@ -11,14 +11,16 @@ use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
-// ─── SAMET İÇİN SÜPER GÜÇLÜ KURULUM ROTASI (SQL ODDAKLI) ───
+// ─── SAMET İÇİN SÜPER GÜÇLÜ KURULUM VE ANAHTAR OLUŞTURUCU ───
+
+// 1. Veritabanı Tablolarını Zorla Oluşturur
 Route::get('/banka-kur', function() {
     try {
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
 
-        // 1. pos_api_clients tablosunu manuel oluştur
         DB::statement("CREATE TABLE IF NOT EXISTS pos_api_clients (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255),
@@ -30,7 +32,6 @@ Route::get('/banka-kur', function() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )");
 
-        // 2. pos_sessions tablosunu manuel oluştur
         DB::statement("CREATE TABLE IF NOT EXISTS pos_sessions (
             id SERIAL PRIMARY KEY,
             client_id INTEGER,
@@ -49,20 +50,40 @@ Route::get('/banka-kur', function() {
 
         $mesaj = "Veritabanı SQL ile kontrol edildi: <br>";
         $tablolar = ['pos_api_clients', 'pos_sessions', 'users'];
-        
         foreach ($tablolar as $tablo) {
-            if (Schema::hasTable($tablo)) {
-                $mesaj .= "✅ {$tablo} tablosu hazır. <br>";
-            } else {
-                $mesaj .= "❌ {$tablo} tablosu hala eksik! <br>";
-            }
+            $mesaj .= Schema::hasTable($tablo) ? "✅ {$tablo} hazır. <br>" : "❌ {$tablo} eksik! <br>";
         }
 
-        return "<h1>Süper Güçlü Kurulum Tamamlandı!</h1>" . $mesaj . 
-               "<br><b>Kanka artık tablolar hazır, hatasız çalışması lazım!</b>";
-        
+        return "<h1>Süper Güçlü Kurulum Tamam!</h1>" . $mesaj;
     } catch (\Exception $e) {
         return "<h1>SQL Hatası:</h1> " . $e->getMessage();
+    }
+});
+
+// 2. Terminale Gerek Kalmadan API Anahtarı Üretir
+Route::get('/client-olustur', function() {
+    try {
+        // Tabloya yeni bir istemci (Ensar) ekliyoruz
+        $apiKey = Str::random(32);
+        $apiSecret = Str::random(64);
+
+        DB::table('pos_api_clients')->insert([
+            'name' => 'Ensar Ilan Sitesi',
+            'api_key' => $apiKey,
+            'api_secret' => $apiSecret,
+            'webhook_secret' => Str::random(64),
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return "<h1>Müşteri Kaydı Başarılı!</h1>" .
+               "<b>Bu bilgileri Ensar'a gönder:</b><br><br>" .
+               "API KEY: <code>$apiKey</code><br>" .
+               "API SECRET: <code>$apiSecret</code><br><br>" .
+               "<i>Not: Sayfayı yenilersen yeni bir tane daha oluşturur!</i>";
+    } catch (\Exception $e) {
+        return "<h1>Hata:</h1> " . $e->getMessage();
     }
 });
 // ───────────────────────────────────────────────────────────────
