@@ -11,30 +11,6 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\DB;
 
-// ─── GEÇİCİ KURULUM ROTASI — KULLANDIKTAN SONRA SİL ──────────
-Route::get('/nova-kur-client', function () {
-    $exists = DB::table('pos_api_clients')
-        ->where('api_key', 'haCWXyyM9gY2NHSCEUfrSvmphk104URS')
-        ->exists();
-
-    if ($exists) {
-        return "<h2>✅ Zaten kayıtlı!</h2> Ensarilan kaydı zaten mevcut.";
-    }
-
-    DB::table('pos_api_clients')->insert([
-        'name'           => 'Ensarilan',
-        'api_key'        => 'haCWXyyM9gY2NHSCEUfrSvmphk104URS',
-        'api_secret'     => 'EULHXII3AQCmWljjeaURuKSBoU52rbkkIjkY0QacYGwCPKmDgu2Jd7JRkfZZ0Q6k',
-        'webhook_secret' => 'nb_whsec_t6pIH1yhJMKNFN7sYi0hSewVc7AsvFL7',
-        'is_active'      => true,
-        'created_at'     => now(),
-        'updated_at'     => now(),
-    ]);
-
-    return "<h2>✅ Başarılı!</h2> Ensarilan pos_api_clients tablosuna eklendi.
-            <br><br><b>⚠️ Şimdi bu Route bloğunu web.php'den silip tekrar deploy et!</b>";
-});
-// ──────────────────────────────────────────────────────────────
 
 Route::middleware('guest')->group(function () {
     Route::get('/',       [AuthController::class, 'showLogin'])->name('home');
