@@ -14,7 +14,7 @@ class PaymentSession extends Model
     use HasFactory;
 
     // KRİTİK DÜZELTME: SQL ile oluşturulan tablo ismini tanımladık
-    protected $table = 'pos_sessions';
+    protected $table = 'payment_sessions';
 
     protected $fillable = [
         'client_id', 'token', 'order_id', 'amount', 'currency',
