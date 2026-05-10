@@ -11,15 +11,14 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\DB;
 
-// ─── ENSARİLAN İÇİN CLIENT KAYIT ROTASI ──────────────────────
-// Kullandıktan sonra bu Route bloğunu sil!
+// ─── GEÇİCİ KURULUM ROTASI — KULLANDIKTAN SONRA SİL ──────────
 Route::get('/nova-kur-client', function () {
     $exists = DB::table('pos_api_clients')
         ->where('api_key', 'haCWXyyM9gY2NHSCEUfrSvmphk104URS')
         ->exists();
 
     if ($exists) {
-        return "<h2>✅ Zaten kayıtlı!</h2> pos_api_clients tablosunda Ensarilan kaydı mevcut.";
+        return "<h2>✅ Zaten kayıtlı!</h2> Ensarilan kaydı zaten mevcut.";
     }
 
     DB::table('pos_api_clients')->insert([
@@ -32,21 +31,21 @@ Route::get('/nova-kur-client', function () {
         'updated_at'     => now(),
     ]);
 
-    return "<h2>✅ Başarılı!</h2> Ensarilan, pos_api_clients tablosuna eklendi.
-            <br><br><strong>⚠️ Şimdi bu rotayı web.php'den silip tekrar deploy et!</strong>";
+    return "<h2>✅ Başarılı!</h2> Ensarilan pos_api_clients tablosuna eklendi.
+            <br><br><b>⚠️ Şimdi bu Route bloğunu web.php'den silip tekrar deploy et!</b>";
 });
 // ──────────────────────────────────────────────────────────────
 
 Route::middleware('guest')->group(function () {
-    Route::get('/',          [AuthController::class, 'showLogin'])->name('home');
-    Route::get('/giris',     [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/giris',    [AuthController::class, 'login']);
-    Route::get('/kayit',     [AuthController::class, 'showRegister'])->name('register');
-    Route::post('/kayit',    [AuthController::class, 'register']);
+    Route::get('/',       [AuthController::class, 'showLogin'])->name('home');
+    Route::get('/giris',  [AuthController::class, 'showLogin'])->name('login');
+    Route::post('/giris', [AuthController::class, 'login']);
+    Route::get('/kayit',  [AuthController::class, 'showRegister'])->name('register');
+    Route::post('/kayit', [AuthController::class, 'register']);
 });
 
 Route::middleware(['auth'])->group(function () {
-    Route::get('/panel', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/panel',  [DashboardController::class, 'index'])->name('dashboard');
     Route::post('/cikis', [AuthController::class, 'logout'])->name('logout');
 
     Route::prefix('hareketler')->name('transactions.')->group(function () {
@@ -54,7 +53,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     Route::prefix('ayarlar')->name('settings.')->group(function () {
-        Route::get('/', [SettingsController::class, 'index'])->name('index');
+        Route::get('/',                             [SettingsController::class, 'index'])->name('index');
         Route::patch('/profil',                     [SettingsController::class, 'updateProfile'])->name('updateProfile');
         Route::patch('/sifre',                      [SettingsController::class, 'updatePassword'])->name('updatePassword');
         Route::patch('/kart/{card}/ozellikler',     [SettingsController::class, 'updateCardFeatures'])->name('updateCardFeatures');
