@@ -68,7 +68,7 @@ return new class extends Migration
         Schema::table('payment_sessions', function (Blueprint $table) {
             $table->foreign('transaction_id')
                   ->references('id')
-                  ->on('transactions')
+                  ->on('pos_transactions')
                   ->onDelete('set null');
         });
     }
