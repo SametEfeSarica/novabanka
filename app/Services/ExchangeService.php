@@ -14,20 +14,21 @@ class ExchangeService
     {
         return Cache::remember('live_prices', 300, function () {
             $prices = [
-                'BTC'  => ['name' => 'Bitcoin',  'price' => 0, 'change' => 0, 'icon' => '₿'],
-                'ETH'  => ['name' => 'Ethereum', 'price' => 0, 'change' => 0, 'icon' => 'Ξ'],
-                'USD'  => ['name' => 'Dolar',    'price' => 0, 'change' => 0, 'icon' => '$'],
-                'EUR'  => ['name' => 'Euro',     'price' => 0, 'change' => 0, 'icon' => '€'],
-                'GBP'  => ['name' => 'Sterlin',  'price' => 0, 'change' => 0, 'icon' => '£'],
-                'GOLD' => ['name' => 'Altın (gr)','price' => 0, 'change' => 0, 'icon' => '🥇'],
+                'BTC'  => ['name' => 'Bitcoin',    'price' => 0, 'change' => 0, 'icon' => '₿'],
+                'ETH'  => ['name' => 'Ethereum',   'price' => 0, 'change' => 0, 'icon' => 'Ξ'],
+                'USD'  => ['name' => 'Dolar',      'price' => 0, 'change' => 0, 'icon' => '$'],
+                'EUR'  => ['name' => 'Euro',       'price' => 0, 'change' => 0, 'icon' => '€'],
+                'GBP'  => ['name' => 'Sterlin',    'price' => 0, 'change' => 0, 'icon' => '£'],
+                'GOLD' => ['name' => 'Altın (gr)', 'price' => 0, 'change' => 0, 'icon' => '🥇'],
             ];
 
             try {
+                // Kripto: CoinGecko (24s değişim dahil)
                 $cryptoResponse = Http::timeout(5)->get(
                     'https://api.coingecko.com/api/v3/simple/price',
                     [
-                        'ids'           => 'bitcoin,ethereum',
-                        'vs_currencies' => 'try',
+                        'ids'                 => 'bitcoin,ethereum',
+                        'vs_currencies'       => 'try',
                         'include_24hr_change' => 'true',
                     ]
                 );
@@ -40,29 +41,57 @@ class ExchangeService
                     $prices['ETH']['change'] = round($data['ethereum']['try_24h_change'] ?? 0, 2);
                 }
 
-                $fxResponse = Http::timeout(5)->get(
-                    'https://api.exchangerate-api.com/v4/latest/TRY'
+                // Döviz: Frankfurter API (ECB, ücretsiz)
+                // Bugün ve dün fiyatını çekip 24s değişim hesaplıyoruz
+                $today     = now()->format('Y-m-d');
+                $yesterday = now()->subDay()->format('Y-m-d');
+
+                $todayFx = Http::timeout(5)->get(
+                    "https://api.frankfurter.app/{$today}",
+                    ['from' => 'TRY', 'to' => 'USD,EUR,GBP']
                 );
 
-                if ($fxResponse->successful()) {
-                    $rates = $fxResponse->json()['rates'] ?? [];
-                    if (isset($rates['USD']) && $rates['USD'] > 0) {
-                        $prices['USD']['price'] = round(1 / $rates['USD'], 4);
+                $yesterdayFx = Http::timeout(5)->get(
+                    "https://api.frankfurter.app/{$yesterday}",
+                    ['from' => 'TRY', 'to' => 'USD,EUR,GBP']
+                );
+
+                if ($todayFx->successful()) {
+                    $todayRates = $todayFx->json()['rates'] ?? [];
+
+                    foreach (['USD', 'EUR', 'GBP'] as $sym) {
+                        if (!empty($todayRates[$sym]) && $todayRates[$sym] > 0) {
+                            $prices[$sym]['price'] = round(1 / $todayRates[$sym], 4);
+                        }
                     }
-                    if (isset($rates['EUR']) && $rates['EUR'] > 0) {
-                        $prices['EUR']['price'] = round(1 / $rates['EUR'], 4);
-                    }
-                    if (isset($rates['GBP']) && $rates['GBP'] > 0) {
-                        $prices['GBP']['price'] = round(1 / $rates['GBP'], 4);
+
+                    // Dünkü veri de geldiyse değişim yüzdesini hesapla
+                    if ($yesterdayFx->successful()) {
+                        $yestRates = $yesterdayFx->json()['rates'] ?? [];
+
+                        foreach (['USD', 'EUR', 'GBP'] as $sym) {
+                            $todayPrice = $prices[$sym]['price'];
+                            $yestRate   = $yestRates[$sym] ?? 0;
+
+                            if ($yestRate > 0 && $todayPrice > 0) {
+                                $yestPrice = round(1 / $yestRate, 4);
+                                if ($yestPrice > 0) {
+                                    $prices[$sym]['change'] = round(
+                                        (($todayPrice - $yestPrice) / $yestPrice) * 100, 2
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
 
             } catch (\Exception $e) {
+                // API'ye ulaşılamazsa sabit fallback değerleri
                 $prices['BTC']['price']  = 2850000;
                 $prices['ETH']['price']  = 95000;
-                $prices['USD']['price']  = 32.5;
-                $prices['EUR']['price']  = 35.2;
-                $prices['GBP']['price']  = 41.3;
+                $prices['USD']['price']  = 32.50;
+                $prices['EUR']['price']  = 35.20;
+                $prices['GBP']['price']  = 41.30;
                 $prices['GOLD']['price'] = 2100;
             }
 
