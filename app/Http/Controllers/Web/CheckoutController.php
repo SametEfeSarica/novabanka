@@ -73,14 +73,14 @@ class CheckoutController extends Controller
 
         // ── 3. İşlem Kaydını Oluştur ───────────────────────────────────────
         $transaction = PosTransaction::create([
-            'session_id'       => $session->id,
-            'card_last_four'   => substr($cardNumber, -4),
-            'card_holder'      => $request->card_holder,
-            'amount'           => $session->amount,
-            'currency'         => $session->currency,
-            'status'           => $isSuccess ? 'completed' : 'failed',
-            'failure_reason'   => $isSuccess ? null : 'Kart reddedildi.',
-            'processed_at'     => now(),
+            'session_id'     => $session->id,
+            'card_last_four' => substr($cardNumber, -4),
+            'card_holder'    => $request->card_holder,
+            'amount'         => $session->amount,
+            'currency'       => $session->currency,
+            'status'         => $isSuccess ? 'completed' : 'failed',
+            'failure_reason' => $isSuccess ? null : 'Kart reddedildi.',
+            'processed_at'   => now(),
         ]);
 
         // ── 4. Oturum Durumunu Güncelle ────────────────────────────────────
@@ -116,7 +116,7 @@ class CheckoutController extends Controller
      * E-ticaret sitesine arka planda webhook gönderir.
      * Başarısız olursa job queue ile tekrar denenir (opsiyonel).
      */
-    private function sendWebhook(PaymentSession $session, Transaction $transaction): void
+    private function sendWebhook(PaymentSession $session, PosTransaction $transaction): void
     {
         // Webhook payload'ı
         $payload = [
