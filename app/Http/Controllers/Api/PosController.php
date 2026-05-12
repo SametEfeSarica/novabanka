@@ -25,7 +25,7 @@ class PosController extends Controller
         // ── Giriş Doğrulama ────────────────────────────────────────────────
         $validator = Validator::make($request->all(), [
             'order_id'       => 'required|string|max:100',
-            'amount'         => 'required|numeric|min:0.01|max:999999.99',
+            'amount'         => 'required|numeric|min:0.01',
             'currency'       => 'required|string|in:TRY,USD,EUR',
             'description'    => 'required|string|max:255',
             'customer_name'  => 'required|string|max:100',
