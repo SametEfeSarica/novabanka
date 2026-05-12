@@ -622,7 +622,7 @@
                             type="text"
                             id="card_number_display"
                             inputmode="numeric"
-                            maxlength="19"
+                            maxlength="22"
                             placeholder="0000  0000  0000  0000"
                             autocomplete="cc-number"
                             class="{{ $errors->has('card_number') ? 'err' : '' }}"
