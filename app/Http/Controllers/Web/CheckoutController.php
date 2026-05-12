@@ -72,7 +72,7 @@ class CheckoutController extends Controller
         $isSuccess  = ! str_starts_with($cardNumber, '4444');
 
         // ── 3. İşlem Kaydını Oluştur ───────────────────────────────────────
-        $transaction = Transaction::create([
+        $transaction = PosTransaction::create([
             'session_id'       => $session->id,
             'card_last_four'   => substr($cardNumber, -4),
             'card_holder'      => $request->card_holder,
