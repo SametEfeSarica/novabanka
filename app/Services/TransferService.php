@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 class TransferService
 {
     const TRANSFER_FEE_PERCENT = 0;
-    const MAX_DAILY_TRANSFER   = 50000;
+    const MAX_DAILY_TRANSFER   = 10000000;
 
     public function transferByIban(
         Account $senderAccount,
