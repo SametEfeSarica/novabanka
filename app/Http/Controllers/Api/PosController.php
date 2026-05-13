@@ -22,6 +22,13 @@ class PosController extends Controller
      */
     public function createSession(Request $request)
     {
+        // ── IBAN'ı temizle: boşlukları sil, büyük harfe çevir ─────────────
+        if ($request->seller_iban) {
+            $request->merge([
+                'seller_iban' => strtoupper(str_replace(' ', '', $request->seller_iban))
+            ]);
+        }
+
         // ── Giriş Doğrulama ────────────────────────────────────────────────
         $validator = Validator::make($request->all(), [
             'order_id'       => 'required|string|max:100',
@@ -32,7 +39,7 @@ class PosController extends Controller
             'customer_email' => 'required|email|max:150',
             'return_url'     => 'required|url|max:500',
             'webhook_url'    => 'required|url|max:500',
-            'seller_iban'    => 'nullable|string|size:26', // ← EKLENDİ
+            'seller_iban'    => 'nullable|string|max:34', // boşluk temizlendi, size yerine max
         ]);
 
         if ($validator->fails()) {
@@ -85,7 +92,7 @@ class PosController extends Controller
             'customer_email' => $request->customer_email,
             'return_url'     => $request->return_url,
             'webhook_url'    => $request->webhook_url,
-            'seller_iban'    => $request->seller_iban, // ← EKLENDİ
+            'seller_iban'    => $request->seller_iban,
             'status'         => 'pending',
             'expires_at'     => now()->addMinutes(30),
         ]);
