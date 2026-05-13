@@ -8,7 +8,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use App\Models\PaymentSession;
-use App\Models\PosApiClient; // Client modelini ekledik
+use App\Models\PosApiClient;
 
 /**
  * PosController
@@ -32,6 +32,7 @@ class PosController extends Controller
             'customer_email' => 'required|email|max:150',
             'return_url'     => 'required|url|max:500',
             'webhook_url'    => 'required|url|max:500',
+            'seller_iban'    => 'nullable|string|size:26', // ← EKLENDİ
         ]);
 
         if ($validator->fails()) {
@@ -43,8 +44,7 @@ class PosController extends Controller
             ], 422);
         }
 
-        // ── KRİTİK DÜZELTME: Client Doğrulaması ─────────────────────────────
-        // Middleware devre dışı olduğu için veritabanındaki aktif ilk istemciyi (Ensar) alıyoruz.
+        // ── Client Doğrulaması ─────────────────────────────────────────────
         $client = PosApiClient::where('is_active', true)->first();
 
         if (!$client) {
@@ -54,7 +54,6 @@ class PosController extends Controller
                 'code'    => 'CLIENT_NOT_FOUND',
             ], 403);
         }
-        // ───────────────────────────────────────────────────────────────────
 
         // ── Aynı sipariş için bekleyen oturum var mı? ──────────────────────
         $existing = PaymentSession::where('client_id', $client->id)
@@ -73,7 +72,7 @@ class PosController extends Controller
         }
 
         // ── Yeni Ödeme Oturumu Oluştur ─────────────────────────────────────
-        $token = 'tok_' . Str::random(32); 
+        $token = 'tok_' . Str::random(32);
 
         $session = PaymentSession::create([
             'client_id'      => $client->id,
@@ -86,15 +85,16 @@ class PosController extends Controller
             'customer_email' => $request->customer_email,
             'return_url'     => $request->return_url,
             'webhook_url'    => $request->webhook_url,
+            'seller_iban'    => $request->seller_iban, // ← EKLENDİ
             'status'         => 'pending',
             'expires_at'     => now()->addMinutes(30),
         ]);
 
         Log::info('Nova POS: Yeni ödeme oturumu oluşturuldu', [
-            'session_id' => $session->id,
-            'client_id'  => $client->id,
-            'order_id'   => $request->order_id,
-            'amount'     => $request->amount,
+            'session_id'  => $session->id,
+            'order_id'    => $request->order_id,
+            'amount'      => $request->amount,
+            'seller_iban' => $request->seller_iban ? '***' . substr($request->seller_iban, -4) : 'YOK',
         ]);
 
         return response()->json([
@@ -111,12 +111,12 @@ class PosController extends Controller
     public function getSessionStatus(Request $request, string $token)
     {
         $client = PosApiClient::where('is_active', true)->first();
-        
+
         $session = PaymentSession::where('token', $token)
-            ->where('client_id', $client->id) 
+            ->where('client_id', $client->id)
             ->first();
 
-        if (! $session) {
+        if (!$session) {
             return response()->json([
                 'success' => false,
                 'error'   => 'Oturum bulunamadı.',
