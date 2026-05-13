@@ -18,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'pos.auth' => PosAuthMiddleware::class,
         ]);
 
+        $middleware->validateCsrfTokens(except: [
+        'checkout/*/process',
+    ]);
+
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
