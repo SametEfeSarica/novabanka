@@ -9,15 +9,19 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('payment_sessions', function (Blueprint $table) {
-            // Satıcının IBAN'ı — ödeme tamamlanınca bu hesaba transfer yapılır
-            $table->string('seller_iban', 26)->nullable()->after('webhook_url');
+            // Foreign key kısıtlamasını kaldır
+            // (transaction_id pos_transactions'a ait, transactions tablosuna değil)
+            $table->dropForeign(['transaction_id']);
         });
     }
 
     public function down(): void
     {
         Schema::table('payment_sessions', function (Blueprint $table) {
-            $table->dropColumn('seller_iban');
+            $table->foreign('transaction_id')
+                  ->references('id')
+                  ->on('transactions')
+                  ->onDelete('set null');
         });
     }
 };
