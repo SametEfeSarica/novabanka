@@ -7,19 +7,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use App\Models\PaymentSession;
 use App\Models\PosTransaction;
 use App\Models\Account;
+use App\Models\Transaction;
 use App\Services\TransferService;
 
-/**
- * CheckoutController
- *
- * Kullanıcının tarayıcısında çalışan ödeme akışını yönetir:
- *  1. Ödeme formunu göster  (show)
- *  2. Kartı işle & IBAN transferi yap & webhook at (process)
- *  3. Sonuç sayfaları (success / failed)
- */
 class CheckoutController extends Controller
 {
     public function __construct(private TransferService $transferService) {}
@@ -40,9 +34,6 @@ class CheckoutController extends Controller
 
     /**
      * POST /checkout/{token}/process
-     *
-     * Kart bilgilerini doğrula → karttan düş → satıcı IBAN'ına transfer et
-     * → webhook at → kullanıcıyı yönlendir.
      */
     public function process(Request $request, string $token)
     {
@@ -68,7 +59,7 @@ class CheckoutController extends Controller
                 ->withInput($request->except(['cvv']));
         }
 
-        // ── 2. Kartı Bul ve Doğrula ────────────────────────────────────────
+        // ── 2. Kartı Doğrula ve Ödemeyi Al ────────────────────────────────
         $cardNumber = $request->card_number;
 
         $paymentResult = $this->transferService->processCardPayment(
@@ -82,7 +73,7 @@ class CheckoutController extends Controller
 
         $isSuccess = $paymentResult['success'];
 
-        // ── 3. İşlem Kaydını Oluştur ───────────────────────────────────────
+        // ── 3. POS İşlem Kaydı ─────────────────────────────────────────────
         $transaction = PosTransaction::create([
             'session_id'     => $session->id,
             'card_last_four' => substr($cardNumber, -4),
@@ -100,46 +91,35 @@ class CheckoutController extends Controller
             'transaction_id' => $transaction->id,
         ]);
 
-        // ── 5. Başarılıysa: Satıcı IBAN'ına Transfer Et ───────────────────
+        // ── 5. Başarılıysa: Satıcıya Transfer Et ──────────────────────────
         if ($isSuccess && $session->seller_iban) {
             $this->transferToSeller($session);
         }
 
-        // ── 6. E-ticaret Sitesine Webhook Gönder ──────────────────────────
+        // ── 6. Webhook Gönder ──────────────────────────────────────────────
         if ($isSuccess) {
             $this->sendWebhook($session, $transaction);
         }
 
-        // ── 7. Kullanıcıyı Return URL'e Yönlendir ─────────────────────────
-        $returnParams = [
+        // ── 7. Yönlendir ───────────────────────────────────────────────────
+        $returnUrl = $session->return_url . '?' . http_build_query([
             'payment_token' => $token,
             'order_id'      => $session->order_id,
             'status'        => $isSuccess ? 'success' : 'failed',
-        ];
-
-        $returnUrl = $session->return_url . '?' . http_build_query($returnParams);
-
-        Log::info('Nova POS: Ödeme işlendi', [
-            'session_id'     => $session->id,
-            'transaction_id' => $transaction->id,
-            'status'         => $transaction->status,
         ]);
 
         return redirect()->away($returnUrl);
     }
 
     /**
-     * Ödeme başarılıysa satıcının IBAN'ına para aktarır.
-     *
-     * Banka'nın sistem hesabı (kart ödemesinden gelen para zaten bu hesapta)
-     * satıcının IBAN'ına TransferService aracılığıyla gönderilir.
+     * Satıcının IBAN'ına para aktarır ve Transaction kaydı oluşturur.
      */
     private function transferToSeller(PaymentSession $session): void
     {
         $sellerAccount = Account::where('iban', $session->seller_iban)->first();
 
         if (!$sellerAccount) {
-            Log::error('Nova POS: Satıcı IBAN\'ı bulunamadı, transfer yapılamadı!', [
+            Log::error('Nova POS: Satıcı IBAN bulunamadı', [
                 'session_id'  => $session->id,
                 'seller_iban' => $session->seller_iban,
             ]);
@@ -147,16 +127,27 @@ class CheckoutController extends Controller
         }
 
         try {
-            // Para doğrudan satıcının hesabına yatırılır.
-            // (processCardPayment zaten alıcının hesabından düştü;
-            //  burada o tutarı satıcıya deposit ediyoruz.)
-            $sellerAccount->deposit($session->amount);
+            DB::transaction(function () use ($session, $sellerAccount) {
+                // Bakiyeyi artır
+                $sellerAccount->deposit($session->amount);
+
+                // Hesap hareketlerine kaydet (+ olarak gözükür)
+                Transaction::create([
+                    'sender_account_id'   => null,
+                    'receiver_account_id' => $sellerAccount->id,
+                    'type'                => Transaction::TYPE_DEPOSIT,
+                    'amount'              => $session->amount,
+                    'currency'            => $session->currency,
+                    'description'         => 'Online Satış: ' . $session->description,
+                    'reference_no'        => Transaction::generateReferenceNo(),
+                    'status'              => 'completed',
+                ]);
+            });
 
             Log::info('Nova POS: Satıcıya transfer tamamlandı', [
                 'session_id'  => $session->id,
                 'seller_iban' => '***' . substr($session->seller_iban, -4),
                 'amount'      => $session->amount,
-                'currency'    => $session->currency,
             ]);
 
         } catch (\Exception $e) {
@@ -168,7 +159,7 @@ class CheckoutController extends Controller
     }
 
     /**
-     * E-ticaret sitesine arka planda webhook gönderir.
+     * E-ticaret sitesine webhook gönderir.
      */
     private function sendWebhook(PaymentSession $session, PosTransaction $transaction): void
     {
@@ -187,18 +178,13 @@ class CheckoutController extends Controller
         $signature     = hash_hmac('sha256', json_encode($payload), $webhookSecret);
 
         try {
-            $response = Http::timeout(10)
+            Http::timeout(10)
                 ->withHeaders([
                     'Content-Type'     => 'application/json',
                     'X-Nova-Signature' => $signature,
                     'X-Nova-Event'     => 'payment.completed',
                 ])
                 ->post($session->webhook_url, $payload);
-
-            Log::info('Nova POS: Webhook gönderildi', [
-                'session_id'  => $session->id,
-                'status_code' => $response->status(),
-            ]);
 
         } catch (\Exception $e) {
             Log::error('Nova POS: Webhook gönderilemedi', [
@@ -208,9 +194,6 @@ class CheckoutController extends Controller
         }
     }
 
-    /**
-     * Geçerli ve süresi dolmamış bir PaymentSession getirir.
-     */
     private function findValidSession(string $token): ?PaymentSession
     {
         return PaymentSession::with('posClient')
