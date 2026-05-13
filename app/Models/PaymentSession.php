@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Carbon\Carbon; // EKLENDİ: Tarih işlemleri için gerekli
+use Carbon\Carbon;
 
 /**
  * PaymentSession — Ödeme Oturumu
@@ -13,13 +13,14 @@ class PaymentSession extends Model
 {
     use HasFactory;
 
-    // KRİTİK DÜZELTME: SQL ile oluşturulan tablo ismini tanımladık
     protected $table = 'payment_sessions';
 
     protected $fillable = [
         'client_id', 'token', 'order_id', 'amount', 'currency',
         'description', 'customer_name', 'customer_email',
-        'return_url', 'webhook_url', 'status', 'transaction_id',
+        'return_url', 'webhook_url',
+        'seller_iban',       // ← EKLENDİ: Satıcının IBAN'ı
+        'status', 'transaction_id',
         'expires_at',
     ];
 
@@ -30,13 +31,11 @@ class PaymentSession extends Model
 
     // ── İlişkiler ──────────────────────────────────────────────────────────
 
-    /** Bu oturumun sahibi e-ticaret sitesi */
     public function posClient()
     {
         return $this->belongsTo(PosApiClient::class, 'client_id');
     }
 
-    /** Bu oturuma bağlı işlem kaydı */
     public function transaction()
     {
         return $this->hasOne(Transaction::class, 'session_id');
@@ -46,7 +45,6 @@ class PaymentSession extends Model
 
     public function isExpired(): bool
     {
-        // Null kontrolü eklendi, expires_at boşsa süresi dolmuş sayar
         return $this->expires_at ? $this->expires_at->isPast() : true;
     }
 
