@@ -206,7 +206,9 @@ class ExchangeService
                 $account = $investment->account;
                 $account->deposit($amountInTRY);
 
-                $investment->quantity -= $quantity;
+                // Matematiksel kesinlik için 8 ondalık haneye yuvarlama işlemi eklendi
+                $investment->quantity = round($investment->quantity - $quantity, 8);
+                
                 if ($investment->quantity <= 0) {
                     $investment->delete();
                 } else {
