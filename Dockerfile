@@ -21,6 +21,8 @@ COPY . /var/www/html
 # 5. Çalışma dizini ve bağımlılıkların kurulumu
 WORKDIR /var/www/html
 RUN composer install --no-interaction --optimize-autoloader --no-dev
+# SSL Sertifikaları
+RUN apt-get install -y ca-certificates
 
 # 6. Apache konfigürasyonunu güncelle
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
