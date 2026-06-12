@@ -63,13 +63,3 @@ Route::get('/checkout/{token}',          [CheckoutController::class, 'show'])->n
 Route::post('/checkout/{token}/process', [CheckoutController::class, 'process'])->name('checkout.process');
 Route::get('/checkout/result/success',   [CheckoutController::class, 'success'])->name('checkout.success');
 Route::get('/checkout/result/failed',    [CheckoutController::class, 'failed'])->name('checkout.failed');
-
-Route::get('/anahtar-uret', function () {
-    // Terminal komutunu çalıştır
-    \Illuminate\Support\Facades\Artisan::call('pos:create-client', [
-        'name' => 'Ensarilan'
-    ]);
-    
-    // Terminalde çıkacak yazıyı ekrana bas
-    return nl2br(\Illuminate\Support\Facades\Artisan::output());
-});
