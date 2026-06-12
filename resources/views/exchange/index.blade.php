@@ -41,7 +41,7 @@
         "
         onmouseenter="this.style.background='rgba(255,255,255,0.045)'; this.style.borderColor='rgba(0,217,163,0.2)'"
         onmouseleave="this.style.background='rgba(255,255,255,0.025)'; this.style.borderColor='rgba(255,255,255,0.06)'"
-        onclick="selectAsset('{{ $symbol }}', {{ $data['price'] }})"
+        onclick="selectAsset('{{ $symbol }}')"
         >
             <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
                 <div style="
@@ -50,19 +50,26 @@
                     border: 1px solid rgba(0,217,163,0.1);
                     border-radius: 10px;
                     display:flex; align-items:center; justify-content:center;
-                    font-size:15px;
-                ">{{ $data['icon'] }}</div>
+                    font-size:16px; color:var(--accent);
+                ">
+                    {{-- İkon fontawesome olarak basılıyor --}}
+                    <i class="{{ $data['icon'] }}"></i>
+                </div>
                 <div>
                     <div style="font-weight:700; font-size:13.5px; color:var(--text);">{{ $symbol }}</div>
                     <div style="font-size:11px; color:var(--text-muted);">{{ $data['name'] }}</div>
                 </div>
             </div>
-            <div style="font-family:'DM Mono',monospace; font-size:17px; font-weight:700; color:var(--text); margin-bottom:5px;">
+            
+            {{-- Güncellenebilir Fiyat ID'si --}}
+            <div id="price-val-{{ $symbol }}" style="font-family:'DM Mono',monospace; font-size:17px; font-weight:700; color:var(--text); margin-bottom:5px;">
                 ₺{{ number_format($data['price'], $symbol === 'BTC' ? 0 : 2) }}
             </div>
-            <div style="font-size:12px; font-weight:600; display:flex; align-items:center; gap:4px; {{ ($data['change'] ?? 0) >= 0 ? 'color:#00D9A3' : 'color:#F43F5E' }}">
-                <i class="fa-solid {{ ($data['change'] ?? 0) >= 0 ? 'fa-caret-up' : 'fa-caret-down' }}"></i>
-                {{ number_format(abs($data['change'] ?? 0), 2) }}%
+            
+            {{-- Güncellenebilir Değişim ID'si --}}
+            <div id="change-container-{{ $symbol }}" style="font-size:12px; font-weight:600; display:flex; align-items:center; gap:4px; {{ ($data['change'] ?? 0) >= 0 ? 'color:#00D9A3' : 'color:#F43F5E' }}">
+                <i id="change-icon-{{ $symbol }}" class="fa-solid {{ ($data['change'] ?? 0) >= 0 ? 'fa-caret-up' : 'fa-caret-down' }}"></i>
+                <span id="change-val-{{ $symbol }}">{{ number_format(abs($data['change'] ?? 0), 2) }}%</span>
             </div>
         </div>
         @endif
@@ -108,7 +115,7 @@
                 <select id="buySymbol" class="form-control" onchange="updateBuyCalc()">
                     @foreach($prices as $symbol => $data)
                     @if($data['price'] > 0)
-                    <option value="{{ $symbol }}" data-price="{{ $data['price'] }}">{{ $symbol }} — {{ $data['name'] }}</option>
+                    <option value="{{ $symbol }}">{{ $symbol }} — {{ $data['name'] }}</option>
                     @endif
                     @endforeach
                 </select>
@@ -262,7 +269,8 @@
 
 @push('scripts')
 <script>
-const prices = @json($prices);
+// Backend'den ilk yüklemede gelen fiyat verisini global değişkende tutuyoruz
+let prices = @json($prices);
 
 function switchTab(tab) {
     document.getElementById('buyForm').style.display  = tab === 'buy' ? 'block' : 'none';
@@ -272,7 +280,7 @@ function switchTab(tab) {
     document.getElementById('sellTab').className = 'tab-btn' + (tab === 'sell' ? ' active-sell' : '');
 }
 
-function selectAsset(symbol, price) {
+function selectAsset(symbol) {
     const select = document.getElementById('buySymbol');
     for (let i = 0; i < select.options.length; i++) {
         if (select.options[i].value === symbol) { select.selectedIndex = i; break; }
@@ -288,7 +296,7 @@ function updateBuyCalc() {
     if (amount > 0 && price > 0) {
         const qty = amount / price;
         document.getElementById('calcQty').textContent   = qty.toFixed(8) + ' ' + symbol;
-        document.getElementById('calcPrice').textContent = '₺' + price.toLocaleString('tr-TR');
+        document.getElementById('calcPrice').textContent = '₺' + price.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
         document.getElementById('buyCalc').style.display = 'block';
     } else {
         document.getElementById('buyCalc').style.display = 'none';
@@ -304,7 +312,7 @@ async function executeBuy() {
 
     const res  = await fetch('{{ route("exchange.buy") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
         body: JSON.stringify({ account_id: accountId, symbol, amount })
     });
     const data = await res.json();
@@ -321,7 +329,7 @@ async function executeSell() {
 
     const res  = await fetch(`/borsa/sat/${investId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
         body: JSON.stringify({ quantity: qty })
     });
     const data = await res.json();
@@ -331,16 +339,48 @@ async function executeSell() {
 }
 
 async function refreshPrices() {
-    const res  = await fetch('{{ route("exchange.prices") }}');
-    const data = await res.json();
-    const el = document.getElementById('lastUpdate');
-    el.innerHTML = '<i class="fa-solid fa-circle-check" style="font-size:10px; margin-right:4px; color:var(--accent);"></i>Son güncelleme: ' + new Date().toLocaleTimeString('tr-TR');
+    try {
+        const res  = await fetch('{{ route("exchange.prices") }}');
+        const newData = await res.json();
+        
+        // Fiyat listesini DOM manipülasyonu ile sayfa yenilenmeden değiştir
+        for (const [symbol, data] of Object.entries(newData)) {
+            prices[symbol] = data; // Hesaplamalar için local state'i de güncelle
+
+            const priceEl = document.getElementById('price-val-' + symbol);
+            if (priceEl) {
+                // Fiyatı formatla
+                priceEl.textContent = '₺' + data.price.toLocaleString('tr-TR', { minimumFractionDigits: (symbol === 'BTC' ? 0 : 2), maximumFractionDigits: (symbol === 'BTC' ? 0 : 2) });
+                
+                // Yüzde değişimini ve rengini ayarla
+                const changeContainer = document.getElementById('change-container-' + symbol);
+                const changeIcon = document.getElementById('change-icon-' + symbol);
+                const changeVal = document.getElementById('change-val-' + symbol);
+                
+                const currentChange = parseFloat(data.change) || 0;
+                changeVal.textContent = Math.abs(currentChange).toFixed(2) + '%';
+                
+                if (currentChange >= 0) {
+                    changeContainer.style.color = '#00D9A3';
+                    changeIcon.className = 'fa-solid fa-caret-up';
+                } else {
+                    changeContainer.style.color = '#F43F5E';
+                    changeIcon.className = 'fa-solid fa-caret-down';
+                }
+            }
+        }
+        
+        // Formdaki hesaplamayı anlık fiyatla yenile
+        updateBuyCalc();
+
+        const el = document.getElementById('lastUpdate');
+        el.innerHTML = '<i class="fa-solid fa-circle-check" style="font-size:10px; margin-right:4px; color:var(--accent);"></i>Son güncelleme: ' + new Date().toLocaleTimeString('tr-TR');
+    } catch(err) {
+        console.error("Fiyatlar güncellenemedi", err);
+    }
 }
 
-// İlk yükleme
-refreshPrices();
-
-// Her 30 saniyede güncelle
-setInterval(refreshPrices, 30000);
+// Her 25 saniyede arka planda API'ye çıkıp fiyatları yenile (Sayfayı yenilemeden)
+setInterval(refreshPrices, 25000);
 </script>
 @endpush
