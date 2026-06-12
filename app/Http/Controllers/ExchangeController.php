@@ -26,9 +26,10 @@ class ExchangeController extends Controller
 
     public function buy(Request $request)
     {
+        // Validation kurallarına yeni sembolleri ekliyoruz.
         $request->validate([
             'account_id' => 'required|exists:accounts,id',
-            'symbol'     => 'required|in:BTC,ETH,USD,EUR,GBP,GOLD',
+            'symbol'     => 'required|string|in:BTC,ETH,SOL,XRP,AVAX,USD,EUR,GBP,CHF,JPY,GOLD,AAPL,TSLA,GOOGL',
             'amount'     => 'required|numeric|min:50',
         ]);
 
